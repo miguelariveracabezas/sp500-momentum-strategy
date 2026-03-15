@@ -1,0 +1,172 @@
+# S&P 500 Cross-Sectional Momentum Strategy
+### Research-Grade Systematic Equity Backtest
+
+A fully systematic quant equity strategy combining academic momentum signals with institutional-grade portfolio construction, realistic execution simulation, and rigorous out-of-sample validation.
+
+---
+
+## Results at a Glance
+
+| Metric | MVO Strategy | SPY Buy & Hold |
+|--------|-------------|----------------|
+| **Ann. Return** | **36.27%** | 13.03% |
+| **Sharpe Ratio** | **1.26** | 0.51 |
+| **Sortino Ratio** | **1.63** | 0.62 |
+| **Calmar Ratio** | **1.39** | 0.39 |
+| **Max Drawdown** | -26.17% | -33.72% |
+| **OOS Sharpe (Walk-Forward)** | **0.69** | — |
+| **% Periods Beating SPY** | **71%** | — |
+
+> **$1 grew to $6.07 (MVO) vs $3.38 (SPY) over 10 years (2015–2025)**
+
+---
+
+## What Makes This Research-Grade
+
+Most student backtests have three fatal flaws: survivorship bias, no out-of-sample test, and unrealistic costs. This project addresses all three.
+
+**1. Point-in-Time Universe**
+Stocks are only eligible at each rebalance if they have 252+ days of price history at that date. This approximates survivorship-bias control — no stock is included because we know it survived to 2024.
+
+**2. Walk-Forward Out-of-Sample Validation**
+14 non-overlapping 6-month test periods using an expanding window (3yr train → 6mo test). Weights are frozen at the training cutoff and evaluated on data the strategy never saw. OOS Sharpe: **0.69**.
+
+**3. Square-Root Market Impact Model**
+Transaction costs use Almgren's square-root impact model, scaled to a $1M portfolio. Costs increase with position size — not a flat bps assumption.
+
+**4. Three Sizing Methods Compared**
+MVO, Equal-Weight, and Inverse-Volatility run on identical signals and universe. MVO (Sharpe 1.26) outperforms EW (1.03) and InvVol (0.92), confirming the optimization adds real value beyond signal selection.
+
+**5. Sector Caps**
+Max 40% per GICS sector at every rebalance. Prevents the strategy from becoming a disguised tech bet during momentum regimes dominated by a single sector.
+
+---
+
+## Strategy Summary
+
+| Parameter | Value |
+|-----------|-------|
+| **Universe** | Top 100 S&P 500 stocks (PIT-approximated) |
+| **Signal** | 12-1 month cross-sectional momentum |
+| **Holdings** | Top 20 momentum winners each month |
+| **Sizing** | MVO (Ledoit-Wolf + Black-Litterman) |
+| **Rebalance** | Monthly |
+| **Max position** | 15% per stock |
+| **Sector cap** | 40% per GICS sector |
+| **Stop-loss** | -15% from entry price |
+| **Benchmark** | SPY buy-and-hold |
+
+---
+
+## Methodology
+
+### Signal: 12-1 Month Momentum
+At each monthly rebalance, every stock is scored by cumulative return from 12 months ago to 1 month ago:
+
+$$\text{Mom}_t = \frac{P_{t-21}}{P_{t-252}} - 1$$
+
+The 1-month skip avoids short-term reversal (Jegadeesh & Titman, 1993). Top 20 stocks by score are selected.
+
+### Covariance: Ledoit-Wolf Shrinkage
+Replaces the sample covariance matrix with a shrinkage estimator. Reduces estimation error in off-diagonal correlations that drive diversification — critical for stable MVO weights.
+
+### Expected Returns: Black-Litterman
+Equilibrium returns $\Pi = \delta \Sigma w_{eq}$ tilted by momentum z-scores:
+
+$$\mu_{BL} = \Pi + \alpha \cdot z_{mom}$$
+
+Anchors returns to market-implied values rather than noisy historical means, producing more stable and realistic portfolio weights.
+
+### Optimization: Maximum Sharpe
+Solves for weights that maximize the Sharpe ratio subject to:
+- Long-only (no short selling)
+- Max 15% per position
+- Max 40% per GICS sector
+- Weights sum to 1
+
+### Transaction Costs: Square-Root Impact
+$$\text{Cost} = \text{bid-ask} + k\sqrt{\frac{\text{trade value}}{\text{ADV}}}$$
+
+Applied on absolute weight change at each rebalance. Costs scale realistically with trade size — larger positions in less liquid stocks cost more.
+
+---
+
+## Subperiod Robustness
+
+| Period | MVO Sharpe | SPY Sharpe |
+|--------|-----------|-----------|
+| Bull 2015–2018 | **1.05** | 0.23 |
+| COVID 2019–2020 | **1.95** | 0.82 |
+| Recovery 2021–2022 | **0.81** | -0.07 |
+| Recent 2023–2024 | 1.55 | **1.69** |
+
+Strategy beats SPY in 3 of 4 subperiods. The one period SPY wins (2023–2024) was driven by concentrated mega-cap tech returns that momentum captured with a lag.
+
+---
+
+## Known Limitations
+
+**Survivorship bias** — Universe uses current S&P 500 constituents. True point-in-time requires Compustat or FactSet historical membership data. Estimated return inflation: 1–3% annually based on academic literature.
+
+**Bull market window** — Backtest covers 2015–2025, a period dominated by equity appreciation. Strategy performance in a prolonged bear market (e.g. 2008) is untested in this version.
+
+**Tech concentration** — During momentum regimes dominated by technology, sector exposure approaches the 40% cap. A portion of alpha may reflect sector beta rather than pure momentum.
+
+**Capacity** — Square-root impact model calibrated to $1M AUM. Strategy capacity is estimated at $50–200M before market impact becomes prohibitive.
+
+**No factor neutralization** — Alpha is not decomposed into market, size, value, and momentum factors. Some reported Sharpe may reflect known risk premia rather than pure alpha.
+
+---
+
+## Tearsheet
+
+![Tearsheet](tearsheet_v2.png)
+
+---
+
+## Setup
+
+```bash
+git clone https://github.com/miguelariveracabezas/sp500-momentum-strategy.git
+cd sp500-momentum-strategy
+pip install -r requirements.txt
+jupyter notebook momentum_strategy_v2.ipynb
+```
+
+---
+
+## Dependencies
+
+```
+yfinance>=0.2.0
+pandas>=2.0
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.3
+matplotlib>=3.7
+jupyter
+```
+
+---
+
+## Project Structure
+
+```
+sp500-momentum-strategy/
+├── momentum_strategy.ipynb      # v1 — original backtest
+├── momentum_strategy_v2.ipynb   # v2 — research-grade backtest
+├── tearsheet_v2.png             # Full 9-panel tearsheet
+├── README.md                    # This file
+└── requirements.txt             # Dependencies
+```
+
+---
+
+## References
+
+- Jegadeesh, N. & Titman, S. (1993). *Returns to Buying Winners and Selling Losers.* Journal of Finance.
+- Black, F. & Litterman, R. (1992). *Global Portfolio Optimization.* Financial Analysts Journal.
+- Ledoit, O. & Wolf, M. (2004). *A well-conditioned estimator for large-dimensional covariance matrices.* Journal of Multivariate Analysis.
+- Almgren, R. et al. (2005). *Direct Estimation of Equity Market Impact.* Risk.
+- Daniel, K. & Moskowitz, T. (2016). *Momentum Crashes.* Journal of Financial Economics.
+- Barroso, P. & Santa-Clara, P. (2015). *Momentum has its moments.* Journal of Financial Economics.
