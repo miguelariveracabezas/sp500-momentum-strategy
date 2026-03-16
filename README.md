@@ -1,172 +1,199 @@
-# S&P 500 Cross-Sectional Momentum Strategy
-### Research-Grade Systematic Equity Backtest
+# S&P 500 Momentum Strategy
 
-A fully systematic quant equity strategy combining academic momentum signals with institutional-grade portfolio construction, realistic execution simulation, and rigorous out-of-sample validation.
+A research-grade cross-sectional equity momentum backtest built in Python and implemented in Jupyter.
 
----
+The project studies whether a constrained large-cap momentum portfolio can outperform SPY after incorporating realistic frictions such as transaction costs, turnover limits, and sector concentration controls. The final notebook also includes walk-forward out-of-sample validation, Fama-French factor attribution, reconciliation checks, and a literature-based survivorship-bias estimate.
 
-## Results at a Glance
+## Project status
 
-| Metric | MVO Strategy | SPY Buy & Hold |
-|--------|-------------|----------------|
-| **Ann. Return** | **36.27%** | 13.03% |
-| **Sharpe Ratio** | **1.26** | 0.51 |
-| **Sortino Ratio** | **1.63** | 0.62 |
-| **Calmar Ratio** | **1.39** | 0.39 |
-| **Max Drawdown** | -26.17% | -33.72% |
-| **OOS Sharpe (Walk-Forward)** | **0.69** | — |
-| **% Periods Beating SPY** | **71%** | — |
+**Current flagship notebook:** `momentum_strategy_v4.ipynb`
 
-> **$1 grew to $6.07 (MVO) vs $3.38 (SPY) over 10 years (2015–2025)**
+This is the strongest version of the project and the one intended for review. Earlier notebooks are retained to show the research progression from prototype to more defensible backtest.
 
----
+## Strategy overview
 
-## What Makes This Research-Grade
+- **Universe:** 100 large-cap U.S. equities in a current S&P 500-style universe
+- **Benchmark:** SPY
+- **Signal:** Vol-adjusted 12-1 momentum
+- **Selection:** Top 20 names by signal at each rebalance
+- **Rebalance frequency:** Quarterly
+- **Sizing methods tested:**
+  - Mean-variance optimization using Ledoit-Wolf covariance shrinkage and a Black-Litterman-style expected return prior
+  - Equal weight
+  - Inverse volatility
+- **Constraints:**
+  - 25% sector cap
+  - 15% max position weight
+  - 50% max one-way turnover per rebalance
+- **Risk controls:**
+  - 15% stop-loss
+  - transaction cost model with square-root market impact
+- **Validation layers:**
+  - internal return-series reconciliation
+  - walk-forward out-of-sample testing
+  - Fama-French 6-factor regression
+  - survivorship-bias quantification
 
-Most student backtests have three fatal flaws: survivorship bias, no out-of-sample test, and unrealistic costs. This project addresses all three.
+## Why this project matters
 
-**1. Point-in-Time Universe**
-Stocks are only eligible at each rebalance if they have 252+ days of price history at that date. This approximates survivorship-bias control — no stock is included because we know it survived to 2024.
+The point of the project is not just to show a high return number. It is to show the full research process:
 
-**2. Walk-Forward Out-of-Sample Validation**
-14 non-overlapping 6-month test periods using an expanding window (3yr train → 6mo test). Weights are frozen at the training cutoff and evaluated on data the strategy never saw. OOS Sharpe: **0.69**.
+- formulate a signal
+- build a portfolio construction engine
+- model implementation frictions
+- test robustness out of sample
+- decompose performance into systematic factors
+- identify where the apparent edge weakens under scrutiny
 
-**3. Square-Root Market Impact Model**
-Transaction costs use Almgren's square-root impact model, scaled to a $1M portfolio. Costs increase with position size — not a flat bps assumption.
+That is the real value of the notebook.
 
-**4. Three Sizing Methods Compared**
-MVO, Equal-Weight, and Inverse-Volatility run on identical signals and universe. MVO (Sharpe 1.26) outperforms EW (1.03) and InvVol (0.92), confirming the optimization adds real value beyond signal selection.
+## Headline results from `momentum_strategy_v4.ipynb`
 
-**5. Sector Caps**
-Max 40% per GICS sector at every rebalance. Prevents the strategy from becoming a disguised tech bet during momentum regimes dominated by a single sector.
+### In-sample / full-period summary
 
----
+| Metric | Strategy | Bias-Adjusted | SPY |
+|---|---:|---:|---:|
+| Annual return | 13.23% | 12.97% | 10.66% |
+| Sharpe ratio | 0.43 | 0.42 | 0.33 |
+| FF6 alpha | 5.56% | 5.31% | -0.50% |
+| FF6 alpha t-stat | 1.52 | 1.52 | -1.82 |
+| Information ratio | 0.37 | 0.37 | -0.23 |
+| Market beta | 0.737 | — | 0.994 |
+| Momentum loading | 0.428 | — | -0.011 |
+| Estimated survivorship bias | 0.25%/yr | — | — |
 
-## Strategy Summary
+### Walk-forward out-of-sample summary
 
-| Parameter | Value |
-|-----------|-------|
-| **Universe** | Top 100 S&P 500 stocks (PIT-approximated) |
-| **Signal** | 12-1 month cross-sectional momentum |
-| **Holdings** | Top 20 momentum winners each month |
-| **Sizing** | MVO (Ledoit-Wolf + Black-Litterman) |
-| **Rebalance** | Monthly |
-| **Max position** | 15% per stock |
-| **Sector cap** | 40% per GICS sector |
-| **Stop-loss** | -15% from entry price |
-| **Benchmark** | SPY buy-and-hold |
+| Metric | OOS MVO |
+|---|---:|
+| Annual return | 20.38% |
+| Sharpe ratio | 0.73 |
+| Max drawdown | -34.81% |
+| Test windows | 28 |
+| Positive alpha windows | 61% |
 
----
+## Interpretation
+
+The final notebook produces encouraging performance, but the most important conclusion is that the strategy is **not yet proven to generate statistically significant standalone alpha**.
+
+The Fama-French 6-factor regression shows:
+
+- annualized alpha of **5.56%**
+- **t-statistic of 1.52**
+- roughly **49% of return variance explained by FF6 factors**
+
+That means the strategy is interesting and reasonably well engineered, but the results are still substantially explained by systematic factor exposure rather than clearly isolated alpha.
 
 ## Methodology
 
-### Signal: 12-1 Month Momentum
-At each monthly rebalance, every stock is scored by cumulative return from 12 months ago to 1 month ago:
+### 1. Data
+Daily adjusted close data is downloaded with `yfinance` from **2008-01-01 to 2025-01-01**.
 
-$$\text{Mom}_t = \frac{P_{t-21}}{P_{t-252}} - 1$$
+### 2. Signal construction
+The core signal is 12-1 momentum:
 
-The 1-month skip avoids short-term reversal (Jegadeesh & Titman, 1993). Top 20 stocks by score are selected.
+- long lookback: 252 trading days
+- skip month: 21 trading days
 
-### Covariance: Ledoit-Wolf Shrinkage
-Replaces the sample covariance matrix with a shrinkage estimator. Reduces estimation error in off-diagonal correlations that drive diversification — critical for stable MVO weights.
+The project then volatility-adjusts the raw momentum score using trailing realized volatility to reduce crash sensitivity.
 
-### Expected Returns: Black-Litterman
-Equilibrium returns $\Pi = \delta \Sigma w_{eq}$ tilted by momentum z-scores:
+### 3. Portfolio construction
+At each rebalance date, the strategy:
 
-$$\mu_{BL} = \Pi + \alpha \cdot z_{mom}$$
+1. ranks the universe on the momentum signal
+2. selects the top 20 names
+3. estimates the covariance matrix with Ledoit-Wolf shrinkage
+4. forms expected returns using a Black-Litterman-style prior plus momentum tilt
+5. solves for constrained weights under position, turnover, and sector limits
 
-Anchors returns to market-implied values rather than noisy historical means, producing more stable and realistic portfolio weights.
+Equal-weight and inverse-volatility portfolios are included as comparison baselines.
 
-### Optimization: Maximum Sharpe
-Solves for weights that maximize the Sharpe ratio subject to:
-- Long-only (no short selling)
-- Max 15% per position
-- Max 40% per GICS sector
-- Weights sum to 1
+### 4. Transaction costs
+Implementation costs are not ignored. The backtest includes:
 
-### Transaction Costs: Square-Root Impact
-$$\text{Cost} = \text{bid-ask} + k\sqrt{\frac{\text{trade value}}{\text{ADV}}}$$
+- bid-ask style slippage assumptions
+- square-root market impact
+- turnover-aware rebalancing
 
-Applied on absolute weight change at each rebalance. Costs scale realistically with trade size — larger positions in less liquid stocks cost more.
+### 5. Validation
+The notebook includes several layers of validation:
 
----
+- cumulative NAV and return-series reconciliation
+- walk-forward training and testing splits
+- factor regression on FF6 daily factors
+- literature-based survivorship-bias adjustment
 
-## Subperiod Robustness
+## Known limitations
 
-| Period | MVO Sharpe | SPY Sharpe |
-|--------|-----------|-----------|
-| Bull 2015–2018 | **1.05** | 0.23 |
-| COVID 2019–2020 | **1.95** | 0.82 |
-| Recovery 2021–2022 | **0.81** | -0.07 |
-| Recent 2023–2024 | 1.55 | **1.69** |
+This section matters as much as the performance table.
 
-Strategy beats SPY in 3 of 4 subperiods. The one period SPY wins (2023–2024) was driven by concentrated mega-cap tech returns that momentum captured with a lag.
+1. **Survivorship bias is not fully eliminated.** The universe is a current large-cap S&P 500-style basket, not a true point-in-time constituent history from CRSP/Compustat/FactSet.
+2. **The Black-Litterman implementation is hybrid rather than fully formal.** It is better described as a Black-Litterman-style expected return framework than a textbook posterior setup.
+3. **Transaction costs are stylized.** They are more realistic than zero-cost backtests, but still not a full execution model.
+4. **Momentum crash risk remains.** Vol-adjustment helps, but does not eliminate reversal risk.
+5. **The sector cap logic should be treated carefully.** The notebook improves concentration control materially, but the implementation can still be tightened further.
+6. **Results are research outputs, not live-trading claims.**
 
----
+## Repository structure
 
-## Known Limitations
+```text
+.
+├── momentum_strategy.ipynb        # initial prototype
+├── momentum_strategy_v2.ipynb     # improved architecture and stronger headline performance
+├── momentum_strategy_v3.ipynb     # extended backtest and robustness improvements
+├── momentum_strategy_v3(1).ipynb  # near-final variant
+├── momentum_strategy_v4.ipynb     # flagship notebook / best overall version
+└── README.md
+```
 
-**Survivorship bias** — Universe uses current S&P 500 constituents. True point-in-time requires Compustat or FactSet historical membership data. Estimated return inflation: 1–3% annually based on academic literature.
+## Running the notebook
 
-**Bull market window** — Backtest covers 2015–2025, a period dominated by equity appreciation. Strategy performance in a prolonged bear market (e.g. 2008) is untested in this version.
-
-**Tech concentration** — During momentum regimes dominated by technology, sector exposure approaches the 40% cap. A portion of alpha may reflect sector beta rather than pure momentum.
-
-**Capacity** — Square-root impact model calibrated to $1M AUM. Strategy capacity is estimated at $50–200M before market impact becomes prohibitive.
-
-**No factor neutralization** — Alpha is not decomposed into market, size, value, and momentum factors. Some reported Sharpe may reflect known risk premia rather than pure alpha.
-
----
-
-## Tearsheet
-
-![Tearsheet](tearsheet_v2.png)
-
----
-
-## Setup
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/miguelariveracabezas/sp500-momentum-strategy.git
-cd sp500-momentum-strategy
-pip install -r requirements.txt
-jupyter notebook momentum_strategy_v2.ipynb
+git clone <your-repo-url>
+cd <your-repo-folder>
 ```
 
----
+### 2. Install dependencies
 
-## Dependencies
-
-```
-yfinance>=0.2.0
-pandas>=2.0
-numpy>=1.24
-scipy>=1.10
-scikit-learn>=1.3
-matplotlib>=3.7
-jupyter
+```bash
+pip install pandas numpy yfinance matplotlib scipy scikit-learn statsmodels jupyter
 ```
 
----
+### 3. Launch Jupyter
 
-## Project Structure
-
-```
-sp500-momentum-strategy/
-├── momentum_strategy.ipynb      # v1 — original backtest
-├── momentum_strategy_v2.ipynb   # v2 — research-grade backtest
-├── tearsheet_v2.png             # Full 9-panel tearsheet
-├── README.md                    # This file
-└── requirements.txt             # Dependencies
+```bash
+jupyter notebook
 ```
 
----
+Then open:
 
-## References
+```text
+momentum_strategy_v4.ipynb
+```
 
-- Jegadeesh, N. & Titman, S. (1993). *Returns to Buying Winners and Selling Losers.* Journal of Finance.
-- Black, F. & Litterman, R. (1992). *Global Portfolio Optimization.* Financial Analysts Journal.
-- Ledoit, O. & Wolf, M. (2004). *A well-conditioned estimator for large-dimensional covariance matrices.* Journal of Multivariate Analysis.
-- Almgren, R. et al. (2005). *Direct Estimation of Equity Market Impact.* Risk.
-- Daniel, K. & Moskowitz, T. (2016). *Momentum Crashes.* Journal of Financial Economics.
-- Barroso, P. & Santa-Clara, P. (2015). *Momentum has its moments.* Journal of Financial Economics.
+## Best way to present this project
+
+For recruiting or academic review, the strongest framing is:
+
+- independent quantitative research project
+- full backtest pipeline with realistic frictions
+- explicit robustness checks
+- honest assessment of where the signal weakens
+
+The weakest framing is claiming that this notebook has already discovered deployable alpha.
+
+## Next improvements
+
+The highest-value next steps are:
+
+- replace the current universe with true point-in-time S&P 500 constituent history
+- harden the sector cap implementation so it is strictly binding after renormalization
+- formalize the Black-Litterman posterior construction
+- expand robustness testing across alternative universes and parameter sets
+- convert the notebook into modular research scripts and reusable functions
+
+## Disclaimer
+
+This repository is for research and educational purposes only. It does not constitute investment advice, an offer to manage capital, or evidence of live tradable performance.
